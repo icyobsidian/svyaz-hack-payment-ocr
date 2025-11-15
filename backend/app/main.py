@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .api.v1.endpoints import router as v1_router
+from .api.v1.training import router as training_router
+from .api.v1.performance import router as performance_router
 
 # Настройка логирования
 logging.basicConfig(
@@ -34,6 +36,8 @@ app.add_middleware(
 
 # Регистрация роутеров
 app.include_router(v1_router, prefix=settings.API_V1_PREFIX, tags=["PDF Processing"])
+app.include_router(training_router, prefix=settings.API_V1_PREFIX, tags=["Model Training"])
+app.include_router(performance_router, prefix=settings.API_V1_PREFIX, tags=["Performance"])
 
 
 @app.get("/")

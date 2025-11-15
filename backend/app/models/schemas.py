@@ -51,6 +51,13 @@ class PaymentInvoiceData(BaseModel):
     # Дополнительные поля
     дополнительные_поля: Optional[Dict[str, Any]] = None
     
+    # Новые поля
+    валюта: Optional[str] = None
+    НДС: Optional[str] = None
+    сумма_прописью: Optional[str] = None
+    договор: Optional[str] = None
+    срок_оплаты: Optional[str] = None
+    
     class Config:
         json_schema_extra = {
             "example": {

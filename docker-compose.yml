@@ -19,6 +19,7 @@ services:
       - LOG_LEVEL=INFO
     volumes:
       - ./backend/app:/app/app
+      - ./backend/models:/app/models
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]

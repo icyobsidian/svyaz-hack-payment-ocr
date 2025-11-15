@@ -14,6 +14,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Создание директории для моделей
+RUN mkdir -p /app/models
+
 # Копирование кода приложения
 COPY app/ ./app/
 

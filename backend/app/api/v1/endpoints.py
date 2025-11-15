@@ -2,6 +2,7 @@
 API endpoints для обработки PDF
 """
 import logging
+import time
 from io import BytesIO
 from fastapi import APIRouter, UploadFile, File, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -9,6 +10,8 @@ from fastapi.responses import JSONResponse
 from ...config import settings
 from ...models.schemas import PDFProcessResponse, ErrorResponse
 from ...services.extractor import PaymentInvoiceExtractor
+from ...utils.cache import pdf_cache
+from .performance import update_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +71,17 @@ async def process_pdf(file: UploadFile = File(...)):
             detail="Файл пустой"
         )
     
+    start_time = time.time()
+    
+    # Проверка кэша
+    file_hash = pdf_cache._generate_key(file_bytes.getvalue())
+    cached_result = pdf_cache.get(file_hash)
+    if cached_result:
+        logger.info("Результат получен из кэша")
+        processing_time = time.time() - start_time
+        update_metrics(processing_time, success=True, cache_hit=True)
+        return PDFProcessResponse(status="success", data=cached_result)
+    
     # Обработка PDF
     try:
         extractor = PaymentInvoiceExtractor()
@@ -84,9 +98,17 @@ async def process_pdf(file: UploadFile = File(...)):
         # Замена None значений на спецслово
         result = _replace_none_with_unrecognized(result)
         
+        # Сохранение в кэш
+        pdf_cache.set(file_hash, result)
+        
+        processing_time = time.time() - start_time
+        update_metrics(processing_time, success=True, cache_hit=False)
+        
         return PDFProcessResponse(status="success", data=result)
         
     except Exception as e:
+        processing_time = time.time() - start_time
+        update_metrics(processing_time, success=False, cache_hit=False)
         logger.error(f"Ошибка при обработке PDF: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

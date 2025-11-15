@@ -9,6 +9,7 @@ from datetime import datetime
 from ..config import settings
 from ..utils.pdf_parser import PDFParser
 from ..utils.ocr import OCRProcessor
+from ..models.ml_model import FieldExtractionModel
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +17,22 @@ logger = logging.getLogger(__name__)
 class PaymentInvoiceExtractor:
     """Извлекатель данных из платежных счетов"""
     
-    def __init__(self):
+    def __init__(self, use_ml: bool = True):
         self.pdf_parser = PDFParser()
         self.ocr_processor = None
+        self.ml_model = None
+        
         try:
             self.ocr_processor = OCRProcessor()
         except ImportError:
             logger.warning("OCR недоступен, будет использоваться только текстовый парсинг")
+        
+        if use_ml:
+            try:
+                self.ml_model = FieldExtractionModel()
+                logger.info("ML модель инициализирована")
+            except Exception as e:
+                logger.warning(f"ML модель недоступна: {e}. Используется только regex.")
     
     def extract(self, pdf_bytes, use_ocr: bool = False) -> Dict[str, Any]:
         """
@@ -53,7 +63,16 @@ class PaymentInvoiceExtractor:
             return {"error": "Не удалось извлечь текст из PDF"}
         
         # Извлечение структурированных данных
-        result = self._parse_text(text)
+        if self.ml_model:
+            # Используем ML модель для извлечения
+            ml_result = self.ml_model.extract_fields(text)
+            # Дополняем результатами regex парсинга
+            regex_result = self._parse_text(text)
+            result = self._merge_results(ml_result, regex_result)
+        else:
+            # Используем только regex
+            result = self._parse_text(text)
+        
         return result
     
     def _parse_text(self, text: str) -> Dict[str, Any]:
@@ -105,6 +124,11 @@ class PaymentInvoiceExtractor:
                 result["банк_плательщика"] = bank_info["плательщик"]
             if bank_info.get("получатель"):
                 result["банк_получателя"] = bank_info["получатель"]
+        
+        # Дополнительные поля
+        additional = self._extract_additional_fields(text)
+        if additional:
+            result["дополнительные_поля"] = additional
         
         return result
     
@@ -257,4 +281,81 @@ class PaymentInvoiceExtractor:
             bank_info["получатель"] = bank_data
         
         return bank_info
+    
+    def _extract_additional_fields(self, text: str) -> Dict[str, Any]:
+        """Извлекает дополнительные поля"""
+        additional = {}
+        
+        # Валюта
+        currency_match = re.search(r'[Вв]алюта[:\s]+([А-Яа-яЁёA-Za-z]{3})', text, re.IGNORECASE)
+        if currency_match:
+            additional["валюта"] = currency_match.group(1).upper()
+        
+        # НДС
+        vat_patterns = [
+            r'[Нн][Дд][Сс][:\s]+(\d+(?:[.,]\d{2})?)',
+            r'[Нн]ДС[:\s]+(\d+(?:[.,]\d{2})?)',
+            r'[Вв]ключая\s+НДС[:\s]+(\d+(?:[.,]\d{2})?)',
+        ]
+        for pattern in vat_patterns:
+            vat_match = re.search(pattern, text, re.IGNORECASE)
+            if vat_match:
+                additional["НДС"] = vat_match.group(1).replace(',', '.')
+                break
+        
+        # Сумма прописью
+        amount_words_pattern = r'[Сс]умма\s+прописью[:\s]+(.+?)(?:\n|Сумма|Итого)'
+        amount_words_match = re.search(amount_words_pattern, text, re.IGNORECASE | re.DOTALL)
+        if amount_words_match:
+            additional["сумма_прописью"] = amount_words_match.group(1).strip()[:200]
+        
+        # Договор/соглашение
+        contract_patterns = [
+            r'[Дд]оговор[:\s]+(.+?)(?:\n|от|№)',
+            r'[Сс]оглашение[:\s]+(.+?)(?:\n|от|№)',
+        ]
+        for pattern in contract_patterns:
+            contract_match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+            if contract_match:
+                additional["договор"] = contract_match.group(1).strip()[:100]
+                break
+        
+        # Срок оплаты
+        payment_term_patterns = [
+            r'[Сс]рок\s+оплаты[:\s]+(\d{1,2}[./]\d{1,2}[./]\d{2,4})',
+            r'[Оо]платить\s+до[:\s]+(\d{1,2}[./]\d{1,2}[./]\d{2,4})',
+        ]
+        for pattern in payment_term_patterns:
+            term_match = re.search(pattern, text, re.IGNORECASE)
+            if term_match:
+                additional["срок_оплаты"] = term_match.group(1)
+                break
+        
+        return additional
+    
+    def _merge_results(self, ml_result: Dict[str, Any], regex_result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Объединяет результаты ML модели и regex парсинга
+        
+        Args:
+            ml_result: Результаты ML модели
+            regex_result: Результаты regex парсинга
+            
+        Returns:
+            Объединенный результат
+        """
+        merged = regex_result.copy()
+        
+        # Добавляем поля из ML модели, если их нет в regex результате
+        for key, value in ml_result.items():
+            if key not in merged or not merged[key] or merged[key] == settings.UNRECOGNIZED_VALUE:
+                if value:
+                    merged[key] = value
+            elif isinstance(value, dict) and isinstance(merged.get(key), dict):
+                # Объединяем вложенные словари
+                for sub_key, sub_value in value.items():
+                    if sub_key not in merged[key] or not merged[key][sub_key]:
+                        merged[key][sub_key] = sub_value
+        
+        return merged
 
