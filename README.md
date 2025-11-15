@@ -1,0 +1,1 @@
+# svyaz-hack-payment-ocr
