@@ -11,8 +11,9 @@
 - 📄 Загрузка PDF-файлов через Telegram-бота
 - 🔍 Автоматическое распознавание и извлечение данных из платежных счетов
 - 📊 Возврат структурированных данных в формате JSON
-- 🤖 Интеграция ML-модели для распознавания документов
+- 🤖 Интеграция OCR для сканированных документов
 - 🐳 Контейнеризация с Docker и Docker Compose
+- 📓 Jupyter notebooks для демонстрации
 
 ## Структура проекта
 
@@ -21,64 +22,84 @@ svyaz-hack-payment-ocr-1/
 ├── backend/              # Backend API сервис
 │   ├── app/
 │   │   ├── main.py      # FastAPI приложение
-│   │   ├── models/      # ML модели
+│   │   ├── api/         # API endpoints
+│   │   ├── models/      # Pydantic схемы
 │   │   ├── services/    # Бизнес-логика
-│   │   └── utils/       # Утилиты
+│   │   └── utils/       # Утилиты (PDF парсинг, OCR)
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── telegram_bot/        # Telegram бот
-│   ├── bot.py
-│   ├── handlers.py
+│   ├── app/
+│   │   ├── bot.py
+│   │   ├── handlers.py
+│   │   └── services.py
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── notebooks/           # Jupyter notebooks
-│   ├── model_training.ipynb
 │   └── pipeline_demo.ipynb
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
 ```
 
-## Технологии
-
-- **Backend**: Python + FastAPI
-- **ML/OCR**: Tesseract OCR, PyMuPDF, OpenCV
-- **Telegram Bot**: python-telegram-bot
-- **Контейнеризация**: Docker, Docker Compose
-
 ## Быстрый старт
+
+📖 **Подробные инструкции:** См. [QUICKSTART.md](QUICKSTART.md)
 
 ### Предварительные требования
 
 - Docker и Docker Compose
 - Python 3.9+ (для локальной разработки)
+- Telegram Bot Token (получить у @BotFather)
 
 ### Запуск через Docker Compose
 
+1. Клонировать репозиторий:
 ```bash
-# Клонировать репозиторий
 git clone <repository-url>
 cd svyaz-hack-payment-ocr-1
+```
 
-# Создать .env файл (см. .env.example)
+2. Создать `.env` файл:
+```bash
 cp .env.example .env
+```
 
-# Запустить все сервисы
+3. Заполнить `TELEGRAM_BOT_TOKEN` в `.env` (получить у @BotFather)
+
+4. Запустить все сервисы:
+```bash
 docker-compose up --build
 ```
 
+Сервисы будут доступны:
+- Backend API: http://localhost:8000
+- Telegram Bot: работает автоматически
+
 ### Локальная разработка
 
+#### Backend
+
 ```bash
-# Backend
 cd backend
 pip install -r requirements.txt
-uvicorn app.main:app --reload
 
-# Telegram Bot
+# Установить Tesseract OCR
+# Windows: https://github.com/UB-Mannheim/tesseract/wiki
+# Linux: sudo apt-get install tesseract-ocr tesseract-ocr-rus tesseract-ocr-eng
+# macOS: brew install tesseract tesseract-lang
+
+uvicorn app.main:app --reload
+```
+
+#### Telegram Bot
+
+```bash
 cd telegram_bot
 pip install -r requirements.txt
-python bot.py
+
+# Создать .env файл с TELEGRAM_BOT_TOKEN
+python -m app.bot
 ```
 
 ## API Endpoints
@@ -88,7 +109,7 @@ python bot.py
 Загрузка и обработка PDF-файла
 
 **Request:**
-- Content-Type: multipart/form-data
+- Content-Type: `multipart/form-data`
 - Body: PDF файл
 
 **Response:**
@@ -106,14 +127,42 @@ python bot.py
 }
 ```
 
+## Использование Telegram бота
+
+1. Найдите бота в Telegram (по username, который вы указали при создании)
+2. Отправьте команду `/start`
+3. Отправьте PDF файл со сканом платежного счета
+4. Получите структурированные данные в формате JSON
+
+## Jupyter Notebooks
+
+Для демонстрации работы пайплайна:
+
+```bash
+cd notebooks
+jupyter notebook
+```
+
+Откройте `pipeline_demo.ipynb` для просмотра демонстрации.
+
 ## Конфигурация
 
-Создайте файл `.env` на основе `.env.example`:
+Основные настройки в `.env`:
 
 ```env
 TELEGRAM_BOT_TOKEN=your_bot_token
 BACKEND_URL=http://backend:8000
 ```
+
+Дополнительные настройки в `backend/env.example` и `telegram_bot/env.example`.
+
+## Технологии
+
+- **Backend**: Python + FastAPI
+- **Telegram Bot**: aiogram 3.x
+- **PDF Processing**: PyMuPDF, pdfplumber
+- **OCR**: Tesseract OCR
+- **Контейнеризация**: Docker, Docker Compose
 
 ## Разработка
 

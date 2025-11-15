@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: payment-ocr-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - API_V1_PREFIX=/api/v1
+      - PROJECT_NAME=Payment OCR Service
+      - VERSION=1.0.0
+      - UNRECOGNIZED_VALUE=НЕ_РАСПОЗНАНО
+      - MAX_FILE_SIZE=20971520
+      - OCR_LANGUAGE=rus+eng
+      - OCR_PSM=6
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend/app:/app/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - payment-ocr-network
+
+  telegram-bot:
+    build:
+      context: ./telegram_bot
+      dockerfile: Dockerfile
+    container_name: payment-ocr-telegram-bot
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - BACKEND_URL=http://backend:8000
+      - ERROR_5XX_PHRASE=Произошла внутренняя ошибка сервера. Попробуйте позже.
+      - MAX_FILE_SIZE=20971520
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - payment-ocr-network
+
+networks:
+  payment-ocr-network:
+    driver: bridge
+
