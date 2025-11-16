@@ -62,8 +62,8 @@ svyaz-hack-payment-ocr-1/
 
 1. Клонировать репозиторий:
 ```bash
-git clone <repository-url>
-cd svyaz-hack-payment-ocr-1
+git clone https://github.com/icyobsidian/svyaz-hack-payment-ocr
+cd svyaz-hack-payment-ocr
 ```
 
 2. Создать `.env` файл:
